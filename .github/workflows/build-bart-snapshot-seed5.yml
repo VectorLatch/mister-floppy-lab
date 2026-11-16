@@ -48,7 +48,7 @@ jobs:
           PY
           git -C fpga diff --stat
           git -C fpga diff > bart-fpga-source.diff
-      - name: Set single fitter seed 5, same as working Rick core
+      - name: Set a single alternative fitter seed (5) to investigate timing
         shell: bash
         run: |
           set -euo pipefail
