@@ -1,0 +1,70 @@
+name: Build Bart Disk 2 diagnostic Main (no FPGA changes)
+
+on:
+  push:
+    branches: [diagnostic/bart-disk2-main-v1]
+    paths:
+      - '.github/workflows/build-bart-main-trace.yml'
+      - 'scripts/patch_bart_main_v1.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bart-main-trace:
+    name: Physical Floppy v1.3 / Bart host-side trace
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get exact Main v1.3 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/manfredi90/Main_MiSTer_Physical_Floppy.git main-source
+          git -C main-source checkout --detach d2757b2c420b1336f51c0ff641f3bad4d3c2c3c2
+          test "$(git -C main-source rev-parse HEAD)" = d2757b2c420b1336f51c0ff641f3bad4d3c2c3c2
+      - name: Apply trace-only source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/patch_bart_main_v1.py main-source
+          git -C main-source diff --check
+          test "$(git -C main-source diff --name-only)" = 'support/minimig/minimig_fdd.cpp'
+          git -C main-source diff --stat
+          git -C main-source diff -- support/minimig/minimig_fdd.cpp > bart-main-trace.diff
+      - name: Install same ARM toolchain used for successful baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 'https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz' | sudo tar -xJ -C /opt
+          echo "$(echo /opt/gcc-arm-*/bin)" >> "$GITHUB_PATH"
+      - name: Compile Main diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C main-source -j2
+          test -s main-source/bin/MiSTer
+          file main-source/bin/MiSTer | grep -q 'ELF 32-bit.*ARM'
+          mkdir -p dist
+          cp main-source/bin/MiSTer dist/MiSTer_Physical-Floppy_BartTrace
+          chmod +x dist/MiSTer_Physical-Floppy_BartTrace
+          (cd dist && sha256sum MiSTer_Physical-Floppy_BartTrace > MiSTer_Physical-Floppy_BartTrace.sha256)
+          {
+            echo 'original_main=manfredi90/Main_MiSTer_Physical_Floppy'
+            echo 'source_commit=d2757b2c420b1336f51c0ff641f3bad4d3c2c3c2'
+            echo 'instrumentation=scripts/patch_bart_main_v1.py'
+            echo 'fpga=unchanged experiment/rick-ersy-v4'
+            echo "github_run_id=$GITHUB_RUN_ID"
+          } > dist/SOURCE-BART.txt
+      - name: Upload diagnostic Main + patch for audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bart-Main-Trace-v1
+          path: |
+            dist/*
+            bart-main-trace.diff
+          if-no-files-found: warn
+          retention-days: 30
