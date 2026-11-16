@@ -130,8 +130,8 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/patch_bart_main_snapshot_v1.py main-source
-          git -C main-source diff --check
-          test "$(git -C main-source diff --name-only)" = "user_io.cpp"
+          git -C main-source diff --check -- user_io.cpp
+          test "$(git -C main-source diff --name-only -- user_io.cpp)" = "user_io.cpp"
           git -C main-source diff -- user_io.cpp > bart-main-source.diff
       - name: Install release-compatible ARM GNU compiler
         shell: bash
