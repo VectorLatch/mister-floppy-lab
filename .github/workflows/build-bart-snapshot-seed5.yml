@@ -165,7 +165,6 @@ jobs:
           {
             echo 'main_upstream=d2757b2c420b1336f51c0ff641f3bad4d3c2c3c2'
             echo 'instrumentation=scripts/patch_bart_main_snapshot_v1.py'
-      - 'scripts/report-bart-timing.tcl'
             echo "github_run=$GITHUB_RUN_ID"
           } > dist/SOURCE-BART-MAIN-SNAPSHOT.txt
       - name: Upload separate Main snapshot reader
