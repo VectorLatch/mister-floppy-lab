@@ -1,0 +1,112 @@
+name: Build Rick Dangerous ERSY v4 test core
+
+on:
+  push:
+    branches: [experiment/rick-ersy-v4]
+    paths:
+      - '.github/workflows/build-rick-ersy-v4.yml'
+      - 'patches/fpga/0001-rick-ersy-v4-beam-counter.patch'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rick-ersy-fpga:
+    name: Minimig / Rick ERSY v4 / seed 4
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout pinned official Minimig source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --branch MiSTer https://github.com/MiSTer-devel/Minimig-AGA_MiSTer.git fpga
+          git -C fpga checkout --detach 7d5d3c2f685af4ce3eb361c22893fccd153f2d87
+          test "$(git -C fpga rev-parse HEAD)" = 7d5d3c2f685af4ce3eb361c22893fccd153f2d87
+      - name: Apply the single confirmed ERSY v4 change
+        shell: bash
+        run: |
+          set -euo pipefail
+          PATCH="$GITHUB_WORKSPACE/patches/fpga/0001-rick-ersy-v4-beam-counter.patch"
+          git -C fpga apply --check "$PATCH"
+          git -C fpga apply "$PATCH"
+          git -C fpga diff --check
+          git -C fpga diff -- rtl/agnus_beamcounter.v
+          test "$(git -C fpga diff --name-only)" = "rtl/agnus_beamcounter.v"
+          test "$(git -C fpga diff --numstat)" = "$(printf '1\t1\trtl/agnus_beamcounter.v')"
+          if grep -Fq 'else if (cck && (~ersy || |hpos[8:1]))' fpga/rtl/agnus_beamcounter.v; then
+            echo 'ERSY condition did not change' >&2
+            exit 1
+          fi
+      - name: Select one fitter seed (the proven v4 seed 4)
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'set_global_assignment -name SEED 1' fpga/Minimig.qsf
+          sed -i 's/-name SEED 1/-name SEED 4/' fpga/Minimig.qsf
+          grep 'set_global_assignment -name SEED 4' fpga/Minimig.qsf
+      - name: Free runner disk space
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache /usr/local/share/powershell /usr/local/share/chromium /usr/local/share/boost /opt/az; do
+            if [ -e "$path" ]; then sudo rm -rf -- "$path"; fi
+          done
+          sudo apt-get clean
+          df -h /
+      - name: Build Quartus FPGA
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/raetro/quartus:mister
+          docker image inspect ghcr.io/raetro/quartus:mister --format '{{json .RepoDigests}}' > quartus-image-digests.json
+          docker run --rm -v "$PWD/fpga:/work" -w /work ghcr.io/raetro/quartus:mister quartus_sh --flow compile Minimig 2>&1 | tee quartus-rick-compile.log
+          test -s fpga/output_files/Minimig.rbf
+      - name: Reject timing failures, retain report
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          log = Path("quartus-rick-compile.log").read_text(errors="replace")
+          names = ("setup", "hold", "recovery", "removal", "minimum pulse width")
+          failures = []
+          for name in names:
+              values = [float(v) for v in re.findall(r"(?im)Worst-case\s+" + re.escape(name) + r"\s+slack\s+is\s+([+-]?\d+(?:\.\d+)?)", log)]
+              if not values:
+                  failures.append("missing " + name + " timing result")
+              else:
+                  worst = min(values)
+                  print(f"{name}: {worst:+.3f} ns")
+                  if worst < 0:
+                      failures.append(f"{name} slack {worst:+.3f} ns")
+          if failures:
+              raise SystemExit("Timing not confirmed clean: " + "; ".join(failures))
+          PY
+          mkdir -p dist
+          cp fpga/output_files/Minimig.rbf dist/Minimig_Rick_ERSY_v4_20261116.rbf
+          (cd dist && sha256sum Minimig_Rick_ERSY_v4_20261116.rbf > Minimig_Rick_ERSY_v4_20261116.sha256)
+          {
+            echo 'fpga_source=MiSTer-devel/Minimig-AGA_MiSTer'
+            echo 'fpga_ref=7d5d3c2f685af4ce3eb361c22893fccd153f2d87'
+            echo 'functional_change=ERSY v4 horizontal beam-counter escape, one line'
+            echo 'seed=4'
+            echo 'main=existing Physical Floppy Main v1.3 (not rebuilt or modified)'
+            echo "github_run_id=$GITHUB_RUN_ID"
+            cat quartus-image-digests.json
+          } > dist/SOURCE-RICK-v4.txt
+      - name: Upload timing-clean Rick experiment and reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: Minimig-Rick-ERSY-v4
+          path: |
+            dist/*
+            fpga/output_files/*.rpt
+            fpga/output_files/*.summary
+            quartus-rick-compile.log
+            quartus-image-digests.json
+          if-no-files-found: error
+          retention-days: 30
