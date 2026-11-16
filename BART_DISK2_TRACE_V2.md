@@ -27,10 +27,10 @@ From macOS Terminal:
 cd "$HOME/Downloads/mister-floppy-lab-starter"
 git fetch origin diagnostic/bart-disk2-main-v2
 git switch --track origin/diagnostic/bart-disk2-main-v2
-bash scripts/deploy-bart-main-trace-v2.sh 43860000000 mister
+bash scripts/deploy-bart-main-trace-v2.sh 43861561838 mister
 ```
 
-Replace the numeric run placeholder with the successful `build-bart-main-trace-v2.yml` workflow run ID (the reference above is a **placeholder**, not a real run). After deployment, reload the `Minimig_Rick_ERSY_v4_20261116` core.
+Build run **43861561838** completed successfully and uploaded `Bart-Main-Trace-v2`. After deployment, reload the `Minimig_Rick_ERSY_v4_20261116` core.
 
 Boot Cartoon Classics Disk 2 IPF **directly** with DF0 only. When the screen hangs, **leave the MiSTer core running for 20–30 seconds**, then:
 
