@@ -83,7 +83,8 @@ static void bart_snapshot_poll()
     fclose(out);
 }
 '''
-    s=once(s,"#include <sys/stat.h>", "#include <sys/stat.h>\n#include <unistd.h>", "unistd declaration")\n    s=once(s,"void user_io_poll()\n{",block+"\nvoid user_io_poll()\n{","snapshot implementation")
+    s=once(s,"#include <sys/stat.h>", "#include <sys/stat.h>\n#include <unistd.h>", "unistd declaration")
+    s=once(s,"void user_io_poll()\n{",block+"\nvoid user_io_poll()\n{","snapshot implementation")
     s=once(s,
         "\t\tpfloppy_amiga_poll();\n\t\tUpdateDriveStatus();",
         "\t\tpfloppy_amiga_poll();\n\t\tUpdateDriveStatus();\n\t\tbart_snapshot_poll();",
