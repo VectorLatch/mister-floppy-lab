@@ -57,9 +57,35 @@ def apply(root):
         "\tassign oDbgIrd = Ird;\r\n"
         "// {A0Err, latchedGroup0, latchedAddrErr, latchedBusErr,\r\n"
         "//  rawAddrErr, BerrA, latchedResetException, halted}\r\n"
-        "\tassign oDbgErrorFlags = {A0Err, inGrp0Exc, rExcAdrErr, rExcBusErr,\r\n"
-        "\t                        rAddrErr, BerrA, rExcRst, oHalted};",
+        "\tassign oDbgErrorFlags = {A0Err, bart_seq_grp0[3], bart_seq_grp0[2], bart_seq_grp0[1],\r\n"
+        "\t                        rAddrErr, BerrA, bart_seq_grp0[0], oHalted};",
         "fx68k debug-only assign"
+    )
+
+    # The group-0 exception flags live inside the *sequencer* module,
+    # not the parent fx68k. Export them as four observation-only wires,
+    # rather than referencing undeclared parent signals.
+    d["fx"] = once(
+        d["fx"], "\tsequencer sequencer(",
+        "\twire [3:0] bart_seq_grp0;\n\n\tsequencer sequencer(",
+        "parent sequencer debug wire"
+    )
+    d["fx"] = once(
+        d["fx"], "\t\t.nma, .a1, .a2, .a3, .tvn,",
+        "\t\t.nma, .oDbgGrp0(bart_seq_grp0), .a1, .a2, .a3, .tvn,",
+        "sequencer parent observation hook"
+    )
+    d["fx"] = once(
+        d["fx"], "\toutput logic [UADDR_WIDTH-1:0] nma);",
+        "\toutput logic [UADDR_WIDTH-1:0] nma,\n"
+        "\toutput wire [3:0] oDbgGrp0);",
+        "sequencer observation-only port"
+    )
+    d["fx"] = once(
+        d["fx"], "\tassign inGrp0Exc = rExcRst | rExcBusErr | rExcAdrErr;",
+        "\tassign inGrp0Exc = rExcRst | rExcBusErr | rExcAdrErr;\n"
+        "\tassign oDbgGrp0 = {inGrp0Exc, rExcAdrErr, rExcBusErr, rExcRst};",
+        "sequencer group0 export"
     )
 
     outputs = (
