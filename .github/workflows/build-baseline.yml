@@ -1,0 +1,150 @@
+name: Build clean Minimig and Physical Floppy baseline
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-baseline.yml'
+      - 'scripts/**'
+      - 'patches/**'
+      - 'UPSTREAM_LOCK.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baseline-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  minimig-fpga:
+    name: FPGA / upstream 2026-11-09 / seed 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout exact upstream FPGA commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --branch MiSTer https://github.com/MiSTer-devel/Minimig-AGA_MiSTer.git fpga
+          git -C fpga checkout --detach 7d5d3c2f685af4ce3eb361c22893fccd153f2d87
+          test "$(git -C fpga rev-parse HEAD)" = 7d5d3c2f685af4ce3eb361c22893fccd153f2d87
+          test -f fpga/Minimig.qpf
+          echo 'Exact FPGA upstream revision checked out.'
+      - name: Apply optional FPGA patches (none in clean baseline)
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          patches=(patches/fpga/*.patch)
+          for p in "${patches[@]}"; do
+            echo "Applying FPGA patch: $p"
+            git -C fpga apply --check "$GITHUB_WORKSPACE/$p"
+            git -C fpga apply "$GITHUB_WORKSPACE/$p"
+          done
+          git -C fpga diff --check
+          git -C fpga diff --stat
+      - name: Reclaim runner disk space
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache /usr/local/share/powershell /usr/local/share/chromium /usr/local/share/boost /opt/az; do
+            if [ -e "$path" ]; then sudo rm -rf -- "$path"; fi
+          done
+          sudo apt-get clean
+          df -h /
+      - name: Compile with Quartus 17.0.2 container (one seed only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/raetro/quartus:mister
+          docker image inspect ghcr.io/raetro/quartus:mister --format '{{json .RepoDigests}}' > quartus-image-digests.json
+          docker run --rm ghcr.io/raetro/quartus:mister quartus_sh --version
+          docker run --rm -v "$PWD/fpga:/work" -w /work ghcr.io/raetro/quartus:mister quartus_sh --flow compile Minimig
+          test -s fpga/output_files/Minimig.rbf
+          mkdir -p dist
+          cp fpga/output_files/Minimig.rbf dist/Minimig_Lab_20261116.rbf
+          (cd dist && sha256sum Minimig_Lab_20261116.rbf > Minimig_Lab_20261116.sha256)
+          {
+            echo 'fpga_source=MiSTer-devel/Minimig-AGA_MiSTer'
+            echo 'fpga_ref=7d5d3c2f685af4ce3eb361c22893fccd153f2d87'
+            echo 'quartus_image=ghcr.io/raetro/quartus:mister'
+            echo 'quartus_image_digest='; cat quartus-image-digests.json
+            echo 'seed=1 (upstream Minimig.qsf)'
+            echo "fpga_patches=$(find patches/fpga -name '*.patch' -type f | wc -l)"
+            echo "github_run_id=${GITHUB_RUN_ID}"
+          } > dist/SOURCE.txt
+          ls -lh dist
+      - name: Upload RBF, reports, and provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Minimig-Lab-baseline
+          path: |
+            dist/*
+            fpga/output_files/*.rpt
+            fpga/output_files/*.summary
+            quartus-image-digests.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  physical-floppy-main:
+    name: ARM Main / Physical Floppy v1.3
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout exact v1.3 source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/manfredi90/Main_MiSTer_Physical_Floppy.git main-source
+          git -C main-source checkout --detach d2757b2c420b1336f51c0ff641f3bad4d3c2c3c2
+          test "$(git -C main-source rev-parse HEAD)" = d2757b2c420b1336f51c0ff641f3bad4d3c2c3c2
+      - name: Apply optional Linux Main patches (none in clean baseline)
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          patches=(patches/main/*.patch)
+          for p in "${patches[@]}"; do
+            echo "Applying Main patch: $p"
+            git -C main-source apply --check "$GITHUB_WORKSPACE/$p"
+            git -C main-source apply "$GITHUB_WORKSPACE/$p"
+          done
+          git -C main-source diff --check
+          git -C main-source diff --stat
+      - name: Install release-compatible ARM GCC
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 'https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz' | sudo tar -xJ -C /opt
+          echo "$(echo /opt/gcc-arm-*/bin)" >> "$GITHUB_PATH"
+      - name: Build and record provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C main-source -j2
+          test -s main-source/bin/MiSTer
+          file main-source/bin/MiSTer | grep -q 'ELF 32-bit.*ARM'
+          mkdir -p dist
+          cp main-source/bin/MiSTer dist/MiSTer_Physical-Floppy
+          chmod +x dist/MiSTer_Physical-Floppy
+          (cd dist && sha256sum MiSTer_Physical-Floppy > MiSTer_Physical-Floppy.sha256)
+          {
+            echo 'main_source=manfredi90/Main_MiSTer_Physical_Floppy'
+            echo 'main_ref=d2757b2c420b1336f51c0ff641f3bad4d3c2c3c2 (v1.3)'
+            echo 'arm_toolchain=10.2-2020.11'
+            echo "main_patches=$(find patches/main -name '*.patch' -type f | wc -l)"
+            echo "github_run_id=${GITHUB_RUN_ID}"
+          } > dist/SOURCE-MAIN.txt
+      - name: Upload ARM Main and provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Physical-Floppy-Main-v1.3-source-build
+          path: dist/*
+          if-no-files-found: warn
+          retention-days: 30

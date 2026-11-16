@@ -1,0 +1,19 @@
+# Never publish proprietary media, binary builds, or private diagnostics
+*.adf
+*.ipf
+*.scp
+*.rom
+*.ROM
+*.rbf
+*.hdf
+*.hdd
+*.zip
+*.7z
+.DS_Store
+*.log
+.env
+*.key
+*.pem
+build/
+output_files/
+dist/
