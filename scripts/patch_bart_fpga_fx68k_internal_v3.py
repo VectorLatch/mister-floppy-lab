@@ -38,12 +38,13 @@ def apply(root):
     # internal indicators. This only adds observation fanout.
     d["fx"] = once(
         d["fx"],
-        "\toutput oRESETn, output oHALTEDn,",
+        "\toutput oRESETn, output oHALTEDn,\n\tinput DTACKn,",
         "\toutput oRESETn, output oHALTEDn,\n"
         "\toutput [9:0] oDbgMicroAddr,\n"
         "\toutput [15:0] oDbgPsw,\n"
         "\toutput [15:0] oDbgIrd,\n"
-        "\toutput [7:0] oDbgErrorFlags,",
+        "\toutput [7:0] oDbgErrorFlags,\n"
+        "\tinput DTACKn,",
         "fx68k internal observation outputs"
     )
     d["fx"] = once(
