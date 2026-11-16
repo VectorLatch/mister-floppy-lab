@@ -31,10 +31,11 @@ From macOS Terminal, once the dedicated job succeeds:
 
 ```bash
 cd "$HOME/Downloads/mister-floppy-lab-starter"
-git pull --ff-only
+git fetch origin experiment/rick-ersy-v4
+git switch --track origin/experiment/rick-ersy-v4
 gh run list --repo VectorLatch/mister-floppy-lab --workflow build-rick-ersy-v4.yml --branch experiment/rick-ersy-v4 --limit 5
 # Use the successful build's actual numeric run ID:
-./scripts/download-rick-ersy-v4.sh RUN_ID mister
+bash ./scripts/download-rick-ersy-v4.sh RUN_ID mister
 ```
 
 The deployment script adds a distinctly named core to `/media/fat/_Unstable`. It does **not** edit `MiSTer.ini`, overwrite the baseline RBF, or alter either Main binary. The already configured `[Minimig] main=MiSTer_Physical-Floppy` continues to apply.
