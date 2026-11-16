@@ -74,14 +74,18 @@ reg inflight;
         "wire [31:0] bart_last_fetch;\n"
         "wire [31:0] bart_prev_fetch;\n\n"
         "cpu_wrapper cpu_wrapper\n", "top diagnostic wires")
-    needle = "\t.ar_fetch     (ar_fetch        ),\n"
-    if d["top"].count(needle) != 2:
-        raise RuntimeError("Expected exactly two ar_fetch hookups in top")
-    d["top"] = d["top"].replace(needle,
-        needle +
-        "\t.bart_fetch_count(bart_fetch_count),\n"
-        "\t.bart_last_fetch(bart_last_fetch),\n"
-        "\t.bart_prev_fetch(bart_prev_fetch),\n")
+    # CPU wrapper and minimig instantiations differ by one whitespace column.
+    import re
+    pattern=r"(?m)^(\s*)\.ar_fetch\s*\(ar_fetch\s*\),$"
+    def wire_fetch(m):
+        pad=m.group(1)
+        return (m.group(0)+"\n"+
+                pad+".bart_fetch_count(bart_fetch_count),\n"+
+                pad+".bart_last_fetch(bart_last_fetch),\n"+
+                pad+".bart_prev_fetch(bart_prev_fetch),")
+    d["top"], n = re.subn(pattern,wire_fetch,d["top"])
+    if n != 2:
+        raise RuntimeError(f"Expected exactly two ar_fetch hookups; found {n}")
 
     d["minimig"] = once(d["minimig"],
         "\tinput         ar_fetch,    // the CPU fetched an instruction outside $A80000-$AFFFFF",
