@@ -13,10 +13,21 @@ BASE="${HOME}/Downloads/mister-floppy-lab/${RUN_ID}"
 mkdir -p "$BASE"
 cd "$BASE"
 echo "Fetching FPGA build artifacts from $REPO run $RUN_ID ..."
-gh run download "$RUN_ID" --repo "$REPO" --name 'Minimig-Lab-baseline' --dir "$BASE/core"
-CORE="$BASE/core/Minimig_Lab_20261116.rbf"
-test -s "$CORE"
-(cd "$BASE/core" && shasum -a 256 -c Minimig_Lab_20261116.sha256)
+# GitHub's artifact may contain dist/ because upload-artifact used multiple path roots.
+# Reuse already-downloaded files, including downloads from before this fix.
+CORE="$(find "$BASE/core" -type f -name 'Minimig_Lab_20261116.rbf' -print -quit 2>/dev/null || true)"
+if [ -z "$CORE" ]; then
+  gh run download "$RUN_ID" --repo "$REPO" --name 'Minimig-Lab-baseline' --dir "$BASE/core"
+  CORE="$(find "$BASE/core" -type f -name 'Minimig_Lab_20261116.rbf' -print -quit)"
+fi
+if [ -z "$CORE" ] || [ ! -s "$CORE" ]; then
+  echo "No nonempty Minimig_Lab_20261116.rbf in downloaded artifact. Check its contents under $BASE/core" >&2
+  exit 1
+fi
+CORE_DIR="$(dirname "$CORE")"
+test -s "$CORE_DIR/Minimig_Lab_20261116.sha256" || { echo "Missing core checksum next to $CORE" >&2; exit 1; }
+(cd "$CORE_DIR" && shasum -a 256 -c Minimig_Lab_20261116.sha256)
+echo "Verified FPGA core: $CORE"
 echo 'Downloading official Physical Floppy v1.3 binary (not an unverified source-built version) ...'
 curl -fL --retry 3 -o "$BASE/MiSTer_Physical-Floppy" 'https://github.com/manfredi90/Main_MiSTer_Physical_Floppy/releases/download/v1.3/MiSTer_Physical-Floppy'
 printf '%s  %s\n' '4420074539883d8fcd43ac53eff7ebc6168b047356ada9a0a524f825b44d186f' 'MiSTer_Physical-Floppy' > "$BASE/MiSTer_Physical-Floppy.sha256"
