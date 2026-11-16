@@ -31,6 +31,8 @@ def apply(root):
         "floppy": root / "rtl/paula_floppy.v",
     }
     d = {k: p.read_text() for k, p in files.items()}
+    # fx68k.sv mixes CRLF and LF. Preserve original bytes to avoid a huge diff.
+    d["fx"] = files["fx"].read_bytes().decode("utf-8")
     if "16'hB4A7" not in d["floppy"] or "bart_bus_events" not in d["cpu"]:
         raise ValueError("Apply existing Bart CPU/Paula v1 and CPU bus v2 patches first.")
 
@@ -38,24 +40,24 @@ def apply(root):
     # internal indicators. This only adds observation fanout.
     d["fx"] = once(
         d["fx"],
-        "\toutput oRESETn, output oHALTEDn,\n\tinput DTACKn,",
-        "\toutput oRESETn, output oHALTEDn,\n"
-        "\toutput [9:0] oDbgMicroAddr,\n"
-        "\toutput [15:0] oDbgPsw,\n"
-        "\toutput [15:0] oDbgIrd,\n"
-        "\toutput [7:0] oDbgErrorFlags,\n"
+        "\toutput oRESETn, output oHALTEDn,\r\n\tinput DTACKn,",
+        "\toutput oRESETn, output oHALTEDn,\r\n"
+        "\toutput [9:0] oDbgMicroAddr,\r\n"
+        "\toutput [15:0] oDbgPsw,\r\n"
+        "\toutput [15:0] oDbgIrd,\r\n"
+        "\toutput [7:0] oDbgErrorFlags,\r\n"
         "\tinput DTACKn,",
         "fx68k internal observation outputs"
     )
     d["fx"] = once(
         d["fx"], "\tassign oHALTEDn = !oHalted;",
-        "\tassign oHALTEDn = !oHalted;\n"
-        "\tassign oDbgMicroAddr = microAddr;\n"
-        "\tassign oDbgPsw = psw;\n"
-        "\tassign oDbgIrd = Ird;\n"
-        "// {A0Err, latchedGroup0, latchedAddrErr, latchedBusErr,\n"
-        "//  rawAddrErr, BerrA, latchedResetException, halted}\n"
-        "\tassign oDbgErrorFlags = {A0Err, inGrp0Exc, rExcAdrErr, rExcBusErr,\n"
+        "\tassign oHALTEDn = !oHalted;\r\n"
+        "\tassign oDbgMicroAddr = microAddr;\r\n"
+        "\tassign oDbgPsw = psw;\r\n"
+        "\tassign oDbgIrd = Ird;\r\n"
+        "// {A0Err, latchedGroup0, latchedAddrErr, latchedBusErr,\r\n"
+        "//  rawAddrErr, BerrA, latchedResetException, halted}\r\n"
+        "\tassign oDbgErrorFlags = {A0Err, inGrp0Exc, rExcAdrErr, rExcBusErr,\r\n"
         "\t                        rAddrErr, BerrA, rExcRst, oHalted};",
         "fx68k debug-only assign"
     )
@@ -175,7 +177,10 @@ end
         "floppy read-only registers 40-44"
     )
     for name,p in files.items():
-        p.write_text(d[name])
+        if name=="fx":
+            p.write_bytes(d[name].encode("utf-8"))
+        else:
+            p.write_text(d[name])
     print("Applied fx68k internal HALT/PSW/uADDR/instruction and exception probe v3.")
 
 if __name__=="__main__":
