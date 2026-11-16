@@ -41,7 +41,7 @@ jobs:
           python3 scripts/patch_bart_fpga_snapshot_v1.py fpga
           python3 scripts/patch_bart_fpga_cpu_bus_v2.py fpga
           python3 scripts/patch_bart_fpga_fx68k_internal_v3.py fpga
-          git -C fpga diff --check
+          git -C fpga -c core.whitespace=cr-at-eol diff --check
           python3 - <<'PY'
           import subprocess
           files=set(subprocess.check_output(["git","-C","fpga","diff","--name-only"],text=True).splitlines())
