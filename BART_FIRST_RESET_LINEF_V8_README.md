@@ -33,7 +33,7 @@ EV_FLAGS bits: 0 reset seen; 1 lineF seen; 2 ovl at last reset; 3 ovl at LineF; 
 
 Branch diagnostic/bart-first-reset-linef-v8. Workflow .github/workflows/build-bart-first-reset-linef-v8.yml. GitHub run https://github.com/VectorLatch/mister-floppy-lab/actions/runs/44070812609.
 
-FPGA fitter exactly one seed 5. All worst-case setup, hold, recovery, removal and minimum pulse-width margins MUST be nonnegative. Both FPGA and matching Main jobs MUST succeed before deployment; inspect actual Quartus timing logs. Preserve known-good Rick core and prior diagnostic builds.
+FPGA fitter exactly one seed 6 for the current retry. All worst-case setup, hold, recovery, removal and minimum pulse-width margins are still checked strictly: failed margins mark the GitHub run FAILED, not a timing-clean build. **The compiled RBF, SHA256 checksum, TIMING-STATUS.json, full logs and timing reports are now archived BEFORE the gate runs, even if timing fails.** This follows repository-wide FPGA_DIAGNOSTIC_BUILD_POLICY.md on main. Clean builds can be installed normally; if and only if the sole failure is timing and compilation/Main succeeded, experimental installation can be requested with --allow-timing-fail. Preserve known-good Rick core and prior diagnostic builds.
 
 ## Installation and testing, Mac
 
@@ -43,7 +43,9 @@ Only after run is confirmed fully successful:
     git fetch origin
     git switch diagnostic/bart-first-reset-linef-v8 2>/dev/null || git switch --track origin/diagnostic/bart-first-reset-linef-v8
     git pull --ff-only
-    bash scripts/deploy-bart-first-reset-linef-v8.sh 44070812609 mister
+    bash scripts/deploy-bart-first-reset-linef-v8.sh <NEW_SEED6_RUN_ID> mister
+    # On a verified timing-only failure, explicitly opt in:
+    # bash scripts/deploy-bart-first-reset-linef-v8.sh <NEW_SEED6_RUN_ID> mister --allow-timing-fail
 
 Installer checks run, branch, workflow, paired artifact hashes, backs up MiSTer.ini and uses uniquely named _Unstable/Minimig_Bart_ResetLineF_v8.rbf and MiSTer_Physical-Floppy_BartResetLineFV8. It never overwrites known-good Rick bitstream or original released Main.
 
@@ -66,3 +68,6 @@ Snapshot commands, run on Mac:
 Rename each captured file before obtaining the next stage, so the same filename does not overwrite earlier evidence. Capture after crash before resetting CPU. For rollback, use MiSTer.ini backup path in $HOME/Downloads/mister-floppy-lab/bart-first-reset-linef-v8/44070812609/remote-backup.txt, then restart MiSTer.
 
 Interpret results cautiously: Line-F event Ir should reflect Fxxx opcode decode; reset event may represent an ordinary system operation; absence of events on cold-start HALT does not invalidate this probe's warm-run purpose. Do not change functional CPU/floppy logic without stronger evidence.
+
+
+Seed6 run: https://github.com/VectorLatch/mister-floppy-lab/actions/runs/44079831839. Always archive .rbf before gate; explicit --allow-timing-fail if the sole failure is static timing.
