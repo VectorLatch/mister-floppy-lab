@@ -33,29 +33,54 @@ mkdir -p "$DIR/fpga" "$DIR/main"
 # Failed FPGA timing is usable only by explicit opt-in and only when
 # compilation, Main, and every other job step succeeded.
 
-ensure_file() {
-  local group="$1" artifact="$2" name="$3"
-  local dest="$DIR/$group/$name"
-  if [ -s "$dest" ]; then return; fi
-  if ! find "$DIR/$group" -type f -name "$name" -print -quit | grep -q .; then
-    gh run download "$RUN" --repo "$REPO" --name "$artifact" --dir "$DIR/$group"
+# gh run download refuses to overwrite paths previously extracted by an
+# interrupted run ("openat ... file exists"). Always extract a complete
+# artifact ONCE into a brand-new empty mktemp directory, then copy only
+# named candidates to deterministic local paths. This is idempotent and
+# never extracts ZIP entries into an old partial download.
+download_artifact() {
+  local group="$1" artifact="$2"
+  shift 2
+  local dest="$DIR/$group"
+  local name src stage
+  mkdir -p "$dest"
+  local complete=1
+  for name in "$@"; do
+    if [ ! -s "$dest/$name" ]; then complete=0; break; fi
+  done
+  if [ "$complete" -eq 1 ]; then
+    echo "Reusing complete local $artifact download."
+    return 0
   fi
-  if [ ! -s "$dest" ]; then
-    local from
-    from="$(find "$DIR/$group" -type f -name "$name" -print -quit)"
-    if [ -z "$from" ]; then
-      echo "Artifact missing: $name" >&2
+
+  stage="$(mktemp -d "$DIR/.download-$group.XXXXXXXX")"
+  echo "Downloading $artifact into clean staging directory..."
+  if ! gh run download "$RUN" --repo "$REPO" --name "$artifact" --dir "$stage"; then
+    rm -rf -- "$stage"
+    echo "Failed downloading $artifact. MiSTer remains unchanged." >&2
+    exit 1
+  fi
+
+  # Validate every required archive member exists before copying
+  # anything into the installation directory.
+  for name in "$@"; do
+    src="$(find "$stage" -type f -name "$name" -print -quit)"
+    if [ -z "$src" ] || [ ! -s "$src" ]; then
+      rm -rf -- "$stage"
+      echo "Artifact $artifact missing nonempty file $name" >&2
       exit 1
     fi
-    cp "$from" "$dest"
-  fi
-  test -s "$dest"
+  done
+  for name in "$@"; do
+    src="$(find "$stage" -type f -name "$name" -print -quit)"
+    cp -f -- "$src" "$dest/$name"
+  done
+  rm -rf -- "$stage"
 }
-ensure_file fpga Bart-ResetLineF-FPGA-v8 "$FPGA"
-ensure_file fpga Bart-ResetLineF-FPGA-v8 "$FPGA_SUM"
-ensure_file main Bart-ResetLineF-Main-v8 "$MAIN"
-ensure_file main Bart-ResetLineF-Main-v8 "$MAIN_SUM"
-ensure_file fpga Bart-ResetLineF-FPGA-v8 "TIMING-STATUS.json"
+download_artifact fpga Bart-ResetLineF-FPGA-v8 \
+  "$FPGA" "$FPGA_SUM" "TIMING-STATUS.json"
+download_artifact main Bart-ResetLineF-Main-v8 \
+  "$MAIN" "$MAIN_SUM"
 
 (cd "$DIR/fpga" && shasum -a 256 -c "$FPGA_SUM")
 (cd "$DIR/main" && shasum -a 256 -c "$MAIN_SUM")
