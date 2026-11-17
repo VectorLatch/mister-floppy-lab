@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
-# macOS: bash scripts/deploy-bart-first-reset-linef-v8.sh <successful-run-id> <mister-host>
-# This diagnostic is only installable from a completed strictly timing-clean build.
+# macOS: bash scripts/deploy-bart-first-reset-linef-v8.sh <run-id> <mister-host> [--allow-timing-fail]
+# Timing-failed builds remain installable for explicit experimental testing only.
 set -euo pipefail
 
-if [ "$#" -ne 2 ]; then
-  echo "Usage: bash $0 <successful v8 run id> <MiSTer hostname or IP>" >&2
+if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+  echo "Usage: bash $0 <v8 run id> <MiSTer hostname or IP> [--allow-timing-fail]" >&2
   exit 2
 fi
 RUN="$1"
 HOST="$2"
+ALLOW_FLAGS=()
+if [ "${3:-}" = "--allow-timing-fail" ]; then
+  ALLOW_FLAGS=(--allow-timing-fail)
+elif [ "$#" -eq 3 ]; then
+  echo "Unknown option: $3 (expected --allow-timing-fail)" >&2
+  exit 2
+fi
 REPO="VectorLatch/mister-floppy-lab"
 BRANCH="diagnostic/bart-first-reset-linef-v8"
 FPGA="Minimig_Bart_ResetLineF_v8.rbf"
@@ -22,14 +29,9 @@ for bin in gh ssh scp python3 shasum; do
 done
 mkdir -p "$DIR/fpga" "$DIR/main"
 
-RUN_JSON="$(gh api "repos/$REPO/actions/runs/$RUN")"
-python3 -c '
-import json,sys
-r=json.load(sys.stdin)
-assert r["status"]=="completed" and r["conclusion"]=="success", "No successful build"
-assert r["head_branch"]=="diagnostic/bart-first-reset-linef-v8", "Wrong experiment branch"
-assert r["path"]==".github/workflows/build-bart-first-reset-linef-v8.yml", "Wrong build workflow"
-' <<< "$RUN_JSON"
+# Validate the run *after downloading* the signed/hashed artifacts.
+# Failed FPGA timing is usable only by explicit opt-in and only when
+# compilation, Main, and every other job step succeeded.
 
 ensure_file() {
   local group="$1" artifact="$2" name="$3"
@@ -53,10 +55,18 @@ ensure_file fpga Bart-ResetLineF-FPGA-v8 "$FPGA"
 ensure_file fpga Bart-ResetLineF-FPGA-v8 "$FPGA_SUM"
 ensure_file main Bart-ResetLineF-Main-v8 "$MAIN"
 ensure_file main Bart-ResetLineF-Main-v8 "$MAIN_SUM"
+ensure_file fpga Bart-ResetLineF-FPGA-v8 "TIMING-STATUS.json"
 
 (cd "$DIR/fpga" && shasum -a 256 -c "$FPGA_SUM")
 (cd "$DIR/main" && shasum -a 256 -c "$MAIN_SUM")
-echo "Validated source build run $RUN and binary checksums."
+python3 scripts/verify-bart-diagnostic-build.py \
+  --repo "$REPO" --run "$RUN" \
+  --branch "$BRANCH" \
+  --workflow ".github/workflows/build-bart-first-reset-linef-v8.yml" \
+  --status-json "$DIR/fpga/TIMING-STATUS.json" \
+  --fpga-binary "$FPGA" "${ALLOW_FLAGS[@]}"
+
+echo "Validated source build run $RUN, timing classification, job failure reasons and binary checksums."
 
 scp "root@$HOST:/media/fat/MiSTer.ini" "$DIR/MiSTer.ini.before"
 python3 - "$DIR/MiSTer.ini.before" "$DIR/MiSTer.ini.bart-v8" "$MAIN" <<'PY'
