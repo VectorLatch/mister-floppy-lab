@@ -19,7 +19,7 @@ fi
 REPO="VectorLatch/mister-floppy-lab"
 BRANCH="diagnostic/bart-first-reset-linef-v8"
 FPGA="Minimig_Bart_ResetLineF_v8.rbf"
-FPGA_SUM="Minimig_Bart_ResetLineF_v8.sha256"
+FPGA_SUM="${FPGA}.sha256"
 MAIN="MiSTer_Physical-Floppy_BartResetLineFV8"
 MAIN_SUM="$MAIN.sha256"
 DIR="$HOME/Downloads/mister-floppy-lab/bart-first-reset-linef-v8/$RUN"
