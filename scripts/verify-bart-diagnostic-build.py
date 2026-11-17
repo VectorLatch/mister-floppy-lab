@@ -76,10 +76,10 @@ def main():
     if kind == "PASS":
         if fj.get("conclusion") != "success" or run.get("conclusion") != "success":
             error("Timing marked PASS but GitHub run was not successful")
-        if any(x is None or x < 0 for x in status.get(
-            "setup_hold_recovery_removal_min_pulse_slack_ns", {}
-        ).values()):
-            error("Timing marked PASS but a recorded margin was negative or missing")
+        slacks = status.get("setup_hold_recovery_removal_min_pulse_slack_ns", {})
+        expected = {"setup", "hold", "recovery", "removal", "minimum pulse width"}
+        if set(slacks) != expected or any(x is None or x < 0 for x in slacks.values()):
+            error("Timing marked PASS but five valid nonnegative margins were not recorded")
         print("Verified: FPGA and Main successful, all timing margins passed, artifact matches this run.")
     elif kind == "FAIL":
         if not args.allow_timing_fail:
