@@ -33,7 +33,7 @@ def apply(root):
     # speculative derived information. The hardware's original functions
     # and timing controls remain untouched.
     d["bp"]=once(d["bp"],
-        "   output   [8:1] bpldata      // bitplane data out",
+        "  output   [8:1] bpldata      // bitplane data out",
         "   output   [8:1] bpldata,     // bitplane data out\n"
         "   output wire [191:0] bart_v9_denise_diag // observation only",
         "Denise bitplane debug output")
