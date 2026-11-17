@@ -1,4 +1,4 @@
-name: Build Bart first CPU RESET and Line-F events v8 (seed 5)
+name: Build Bart first CPU RESET and Line-F events v8 (seed 6; retain timing-failed FPGA)
 
 on:
   push:
@@ -16,6 +16,7 @@ on:
       - 'scripts/patch_bart_main_first_df_fetch_v6.py'
       - 'scripts/patch_bart_main_first_reset_linef_v8.py'
       - 'scripts/report-bart-timing.tcl'
+      - 'scripts/package-bart-diagnostic-fpga.py'
   workflow_dispatch:
 
 permissions:
@@ -23,7 +24,7 @@ permissions:
 
 jobs:
   bart-fpga:
-    name: Rick-fixed first RESET and Line-F trace v8 FPGA / fitter seed 5
+    name: Rick-fixed first RESET and Line-F trace v8 FPGA / fitter seed 6
     runs-on: ubuntu-24.04
     timeout-minutes: 160
     steps:
@@ -60,12 +61,12 @@ jobs:
           PY
           git -C fpga diff --stat
           git -C fpga diff > bart-fpga-source.diff
-      - name: Use only fitter seed 5 for timing-clean diagnostic
+      - name: Use one fitter seed 6 to retry timing closure
         shell: bash
         run: |
           set -euo pipefail
           grep -q 'set_global_assignment -name SEED 1' fpga/Minimig.qsf
-          sed -i 's/-name SEED 1/-name SEED 5/' fpga/Minimig.qsf
+          sed -i 's/-name SEED 1/-name SEED 6/' fpga/Minimig.qsf
       - name: Free runner disk space
         shell: bash
         run: |
@@ -90,34 +91,43 @@ jobs:
             cp scripts/report-bart-timing.tcl fpga/report-bart-timing.tcl
             docker run --rm -v "$PWD/fpga:/work" -w /work ghcr.io/raetro/quartus:mister quartus_sta -t report-bart-timing.tcl 2>&1 | tee bart-detailed-timing.log || true
           fi
-      - name: Strict timing gate - require nonnegative worst-case slack on all categories
+      # Repository policy for all future Bart diagnostics:
+      # Once Quartus has compiled an .rbf, ALWAYS archive it with checksum,
+      # all five timing margins and an explicit PASS/FAIL/UNKNOWN verdict.
+      # A negative timing margin still FAILS the Actions job, but the bitstream
+      # remains downloadable for a user-selected experimental test.
+      - name: Package compiled FPGA bitstream and timing verdict BEFORE strict gate
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          log=Path("quartus-bart-compile.log").read_text(errors="replace")
-          missing=[]
-          for name in ("setup", "hold", "recovery", "removal", "minimum pulse width"):
-              values=[float(s) for s in re.findall(
-                  r"(?im)Worst-case\s+"+re.escape(name)+r"\s+slack\s+is\s+([+-]?\d+(?:\.\d+)?)",log)]
-              if not values: missing.append(f"missing {name}")
-              elif min(values) < 0.0: missing.append(f"{name} slack {min(values):+.3f} ns")
-              else: print(f"{name} slack: {min(values):+.3f} ns")
-          if missing: raise SystemExit("Timing not confirmed clean: "+"; ".join(missing))
-          PY
-          mkdir -p dist
-          cp fpga/output_files/Minimig.rbf dist/Minimig_Bart_ResetLineF_v8.rbf
-          (cd dist && sha256sum Minimig_Bart_ResetLineF_v8.rbf > Minimig_Bart_ResetLineF_v8.sha256)
+          python3 scripts/package-bart-diagnostic-fpga.py package \
+            --binary fpga/output_files/Minimig.rbf \
+            --compile-log quartus-bart-compile.log \
+            --out dist \
+            --name Minimig_Bart_ResetLineF_v8.rbf \
+            --seed 6 \
+            --run-id "$GITHUB_RUN_ID" \
+            --source-sha "$GITHUB_SHA"
           {
             echo 'fpga_upstream=7d5d3c2f685af4ce3eb361c22893fccd153f2d87'
             echo 'working_rick_fix=ERSY v4 patch'
             echo 'bart_instrumentation=v1+v2+v3+v6 plus scripts/patch_bart_fpga_first_reset_linef_v8.py'
-            echo 'fitter_seed=5'
+            echo 'fitter_seed=6'
             echo "github_run=$GITHUB_RUN_ID"
+            echo "github_sha=$GITHUB_SHA"
+            cat dist/TIMING-STATUS.txt
             cat quartus-image-digests.json
           } > dist/SOURCE-BART-SNAPSHOT.txt
+          test -s dist/Minimig_Bart_ResetLineF_v8.rbf
+          test -s dist/Minimig_Bart_ResetLineF_v8.rbf.sha256
+          test -s dist/TIMING-STATUS.json
+          echo "Compiled bitstream was packaged before enforcing timing gate."
+      - name: Strict timing gate - require nonnegative worst-case slack on all categories
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/package-bart-diagnostic-fpga.py gate \
+            --status-file dist/TIMING-STATUS.json
       - name: Upload FPGA and timing reports, even if timing is rejected
         if: always()
         uses: actions/upload-artifact@v4
