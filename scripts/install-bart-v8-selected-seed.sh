@@ -14,9 +14,9 @@ if ! [[ "$SEED" =~ ^(7|8|9|10|11|12)$ ]]; then
   echo "Expected a seed from 7 to 12; got: $SEED" >&2
   exit 2
 fi
-ALLOW_FLAGS=()
+ALLOW_TIMING_FAIL=0
 if [ "${4:-}" = "--allow-timing-fail" ]; then
-  ALLOW_FLAGS=(--allow-timing-fail)
+  ALLOW_TIMING_FAIL=1
 elif [ "$#" -eq 4 ]; then
   echo "Unknown option: $4 (expected --allow-timing-fail)" >&2
   exit 2
@@ -89,12 +89,19 @@ download_artifact main Bart-ResetLineF-Main-v8-SixSeeds \
 
 (cd "$DIR/fpga" && shasum -a 256 -c "$FPGA_SUM")
 (cd "$DIR/main" && shasum -a 256 -c "$MAIN_SUM")
-python3 scripts/verify-bart-v8-selected-seed.py \
-  --repo "$REPO" --run "$RUN" --seed "$SEED" \
-  --branch "$BRANCH" \
-  --workflow ".github/workflows/build-bart-v8-six-seeds.yml" \
-  --status-json "$DIR/fpga/TIMING-STATUS.json" \
-  --fpga-binary "$FPGA" "${ALLOW_FLAGS[@]}"
+# macOS ships Bash 3.2, where expanding an *empty* array with
+# set -u raises "unbound variable". VERIFY_ARGS is always nonempty.
+VERIFY_ARGS=(
+  --repo "$REPO" --run "$RUN" --seed "$SEED"
+  --branch "$BRANCH"
+  --workflow ".github/workflows/build-bart-v8-six-seeds.yml"
+  --status-json "$DIR/fpga/TIMING-STATUS.json"
+  --fpga-binary "$FPGA"
+)
+if [ "$ALLOW_TIMING_FAIL" -eq 1 ]; then
+  VERIFY_ARGS+=(--allow-timing-fail)
+fi
+python3 scripts/verify-bart-v8-selected-seed.py "${VERIFY_ARGS[@]}"
 
 echo "Validated source build run $RUN, timing classification, job failure reasons and binary checksums."
 
