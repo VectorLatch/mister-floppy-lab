@@ -15,16 +15,26 @@ case "$CIA"  in 0|1|2|3) ;; *) echo "CIA wait must be 0..3" >&2; exit 2;; esac
 # Explicitly validate readback; do not report success merely because SSH worked.
 ssh "root@$HOST" "
   set -eu
-  rm -f /tmp/bart-v11-waits.last
-  printf '%s %s\n' '$CHIP' '$CIA' > /tmp/bart-v11-waits.req
-  n=0
-  while [ ! -s /tmp/bart-v11-waits.last ]; do
-    sleep 1
-    n=\$((n+1))
-    if [ \"\$n\" -ge 6 ]; then
-      echo 'ERROR: matching v11 Main is not servicing timing requests' >&2
-      exit 1
+  # Main's SPI pipeline can return the *previous* E8xx register value
+  # on the first command. Send twice: the second readback must agree with
+  # the newly latched value. Both writes are idempotent and occur before F12.
+  attempt=1
+  while [ \"\$attempt\" -le 2 ]; do
+    rm -f /tmp/bart-v11-waits.last
+    printf '%s %s\n' '$CHIP' '$CIA' > /tmp/bart-v11-waits.req
+    n=0
+    while [ ! -s /tmp/bart-v11-waits.last ]; do
+      sleep 1
+      n=\$((n+1))
+      if [ \"\$n\" -ge 6 ]; then
+        echo 'ERROR: matching v11 Main is not servicing timing requests' >&2
+        exit 1
+      fi
+    done
+    if [ \"\$attempt\" -eq 1 ]; then
+      echo 'First configuration write completed; verifying latched setting...'
     fi
+    attempt=\$((attempt+1))
   done
   cat /tmp/bart-v11-waits.last
   grep -q '^OK BART_V11 CHIP_WAIT=$CHIP CIA_WAIT=$CIA FPGA_ACK=' /tmp/bart-v11-waits.last
