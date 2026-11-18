@@ -4,14 +4,14 @@
 set -euo pipefail
 
 if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
-  echo "Usage: bash $0 <v13 CPU fetch-data run id> <seed 11,15,21-24> <MiSTer hostname or IP> [--allow-timing-fail]" >&2
+  echo "Usage: bash $0 <v13 CPU fetch-data run id> <seed 3,7,11,13,15,17,21-24,27,31> <MiSTer hostname or IP> [--allow-timing-fail]" >&2
   exit 2
 fi
 RUN="$1"
 SEED="$2"
 HOST="$3"
-if ! [[ "$SEED" =~ ^(11|15|21|22|23|24)$ ]]; then
-  echo "Expected one of v13 seeds 11,15,21,22,23,24; got: $SEED" >&2
+if ! [[ "$SEED" =~ ^(3|7|11|13|15|17|21|22|23|24|27|31)$ ]]; then
+  echo "Expected one of v13 seeds 3,7,11,13,15,17,21,22,23,24,27,31; got: $SEED" >&2
   exit 2
 fi
 ALLOW_TIMING_FAIL=0
