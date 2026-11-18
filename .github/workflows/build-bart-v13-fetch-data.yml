@@ -67,7 +67,7 @@ jobs:
           python3 scripts/patch_bart_fpga_instruction_fetch_v13.py fpga
           grep -q "16'hB4AF" fpga/rtl/paula_floppy.v
           grep -q 'oDbgIrc' fpga/rtl/fx68k/fx68k.sv
-          grep -q 'bart_v12_linef_edge' fpga/rtl/cpu_wrapper.v
+          grep -q 'bart_v13_linef_edge' fpga/rtl/cpu_wrapper.v
           git -C fpga -c core.whitespace=cr-at-eol diff --check
           python3 - <<'PY'
           import subprocess
