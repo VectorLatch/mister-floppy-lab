@@ -36,8 +36,10 @@ def main():
     args = p.parse_args()
 
     run = api(f"repos/{args.repo}/actions/runs/{args.run}")
-    if run.get("status") != "completed":
-        error("GitHub Actions run is not completed")
+    # A selected seed can be installed once its own job and the shared Main
+    # have completed successfully, even if unrelated matrix seeds are running.
+    if run.get("status") not in ("in_progress", "completed"):
+        error("GitHub Actions run has not started or is not ready")
     if run.get("head_branch") != args.branch:
         error("Wrong GitHub branch")
     if run.get("path", "").lstrip("./") != args.workflow.lstrip("./"):
@@ -55,7 +57,7 @@ def main():
         error("Matching ARM Main job did not succeed")
     if fj.get("status") != "completed":
         error("FPGA job is not complete")
-    if run.get("conclusion") not in ("success", "failure"):
+    if run.get("status") == "completed" and run.get("conclusion") not in ("success", "failure"):
         error("Unexpected overall workflow conclusion")
 
     status_path = Path(args.status_json)
@@ -97,7 +99,7 @@ def main():
         failed = [s.get("name", "") for s in fj.get("steps", []) if s.get("conclusion") == "failure"]
         if len(failed) != 1 or failed[0] != "Strict timing gate - require nonnegative worst-case slack on all categories":
             error("FPGA failure was not exclusively the expected strict timing gate")
-        if fj.get("conclusion") != "failure" or run.get("conclusion") != "failure":
+        if fj.get("conclusion") != "failure" or (run.get("status") == "completed" and run.get("conclusion") != "failure"):
             error("Timing-failed diagnostic has an unexpected GitHub run/job conclusion")
         slacks = status.get("setup_hold_recovery_removal_min_pulse_slack_ns", {})
         if len(slacks) != 5 or any(x is None for x in slacks.values()) or all(x >= 0 for x in slacks.values()):
