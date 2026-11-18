@@ -21,7 +21,7 @@ if len(main)!=1 or main[0].get("conclusion")!="success":
     print("")
     sys.exit(0)
 prefix="Rick-fixed Bart v13 fetch-data FPGA / fitter seed "
-for seed in (15,11,22,24,21,23):
+for seed in (31,17,13,27,7,3,21,15,11,22,24,23):
     matches=[j for j in jobs if j.get("name")==prefix+str(seed)]
     if len(matches)==1 and matches[0].get("status")=="completed" and matches[0].get("conclusion")=="success":
         print(seed)
