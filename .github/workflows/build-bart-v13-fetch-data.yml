@@ -38,7 +38,7 @@ jobs:
       fail-fast: false
       max-parallel: 6
       matrix:
-        seed: [11, 15, 21, 22, 23, 24]
+        seed: [3, 7, 13, 17, 27, 31]
     timeout-minutes: 160
     steps:
       - uses: actions/checkout@v4
