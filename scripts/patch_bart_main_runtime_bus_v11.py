@@ -44,7 +44,7 @@ static void bart_v11_wait_poll()
     FILE *out=fopen("/tmp/bart-v11-waits.last","w");
     if (!out) return;
     if(got!=2 || chip<0 || chip>3 || cia<0 || cia>3) {
-        fprintf(out,"ERROR invalid waits; expected two integers (chip CIA), both 0..3\\n");
+        fprintf(out,"ERROR invalid waits; expected two integers (chip CIA), both 0..3\n");
         fclose(out);
         return;
     }
@@ -56,9 +56,9 @@ static void bart_v11_wait_poll()
     const uint16_t reply=spi_w(0);
     DisableFpga();
     if(reply!=(uint16_t)(0xB800|packed))
-        fprintf(out,"ERROR FPGA did not acknowledge E8 waits: chip=%d cia=%d, reply=%04X; do not trust configuration\\n",chip,cia,reply);
+        fprintf(out,"ERROR FPGA did not acknowledge E8 waits: chip=%d cia=%d, reply=%04X; do not trust configuration\n",chip,cia,reply);
     else
-        fprintf(out,"OK BART_V11 CHIP_WAIT=%d CIA_WAIT=%d FPGA_ACK=%04X (reset Amiga via F12 before game test)\\n",chip,cia,reply);
+        fprintf(out,"OK BART_V11 CHIP_WAIT=%d CIA_WAIT=%d FPGA_ACK=%04X (reset Amiga via F12 before game test)\n",chip,cia,reply);
     fclose(out);
 }
 '''
