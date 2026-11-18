@@ -44,7 +44,7 @@ FPGA fitter placement; strict timing checks are required before use.
 ## Build
 Branch diagnostic/bart-instruction-fetch-data-v13
 Workflow .github/workflows/build-bart-v13-fetch-data.yml
-Six parallel FPGA seeds 11,15,21,22,23,24; one shared Main ARM job.
+Initial six FPGA seeds 11,15,21,22,23,24 all missed setup (best seed 21 -0.039 ns). Retry batch: six parallel seeds 3,7,13,17,27,31, with unchanged functional HDL; one shared ARM Main job. No timing-violating FPGA should be installed by default.
 The installer verifies per-seed SHA256, source SHA, matching Main,
 and nonnegative setup/hold/recovery/removal/min pulse margins.
 A workflow can show overall failure if four seeds fail timing, while
