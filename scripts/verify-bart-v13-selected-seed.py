@@ -45,8 +45,8 @@ def main():
     if run.get("path", "").lstrip("./") != args.workflow.lstrip("./"):
         error("Wrong GitHub workflow")
     jobs = api(f"repos/{args.repo}/actions/runs/{args.run}/jobs?per_page=100").get("jobs", [])
-    if args.seed not in (11, 15, 21, 22, 23, 24):
-        error("Selected seed must be in v13 run seed matrix: 11,15,21,22,23,24")
+    if args.seed not in (3, 7, 11, 13, 15, 17, 21, 22, 23, 24, 27, 31):
+        error("Selected seed must be in v13 run seed matrix: 3,7,11,13,15,17,21,22,23,24,27,31")
     fpga = [j for j in jobs if j.get("name", "").startswith("Rick-fixed Bart v13 fetch-data FPGA ") and
             j.get("name", "").endswith(f"fitter seed {args.seed}")]
     main_jobs = [j for j in jobs if j.get("name", "").startswith("Physical Floppy Main")]
