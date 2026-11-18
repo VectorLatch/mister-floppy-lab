@@ -1,0 +1,220 @@
+name: Bart v11 live CPU bus waits experiment — six parallel timing seeds
+
+on:
+  push:
+    branches: [diagnostic/bart-runtime-bus-waits-v11]
+    paths:
+      - '.github/workflows/build-bart-v11-runtime-waits.yml'
+      - 'scripts/patch_bart_fpga_snapshot_v1.py'
+      - 'scripts/patch_bart_fpga_cpu_bus_v2.py'
+      - 'scripts/patch_bart_fpga_fx68k_internal_v3.py'
+      - 'scripts/patch_bart_fpga_first_df_fetch_v6.py'
+      - 'scripts/patch_bart_fpga_first_reset_linef_v8.py'
+      - 'scripts/patch_bart_main_snapshot_v1.py'
+      - 'scripts/patch_bart_main_cpu_bus_v2.py'
+      - 'scripts/patch_bart_main_fx68k_internal_v3.py'
+      - 'scripts/patch_bart_main_first_df_fetch_v6.py'
+      - 'scripts/patch_bart_main_first_reset_linef_v8.py'
+      - 'scripts/report-bart-timing.tcl'
+      - 'scripts/package-bart-diagnostic-fpga.py'
+      - 'scripts/deploy-bart-v8-six-seeds.sh'
+      - 'scripts/verify-bart-v8-six-seeds.py'
+      - 'scripts/patch_bart_fpga_runtime_bus_v11.py'
+      - 'scripts/patch_bart_main_runtime_bus_v11.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bart-fpga:
+    name: Rick-fixed Bart v11 runtime CPU waits FPGA / fitter seed ${{ matrix.seed }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        seed: [11, 15, 21, 22, 23, 24]
+    timeout-minutes: 160
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pinned upstream FPGA
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --branch MiSTer https://github.com/MiSTer-devel/Minimig-AGA_MiSTer.git fpga
+          git -C fpga checkout --detach 7d5d3c2f685af4ce3eb361c22893fccd153f2d87
+          test "$(git -C fpga rev-parse HEAD)" = 7d5d3c2f685af4ce3eb361c22893fccd153f2d87
+      - name: Apply exact proven Rick fix plus Bart read-only CPU/Paula taps
+        shell: bash
+        run: |
+          set -euo pipefail
+          PATCH="$GITHUB_WORKSPACE/patches/fpga/0001-rick-ersy-v4-beam-counter.patch"
+          git -C fpga apply --check "$PATCH"
+          git -C fpga apply "$PATCH"
+          python3 scripts/patch_bart_fpga_snapshot_v1.py fpga
+          python3 scripts/patch_bart_fpga_cpu_bus_v2.py fpga
+          python3 scripts/patch_bart_fpga_fx68k_internal_v3.py fpga
+          python3 scripts/patch_bart_fpga_first_df_fetch_v6.py fpga
+          python3 scripts/patch_bart_fpga_first_reset_linef_v8.py fpga
+          python3 scripts/patch_bart_fpga_runtime_bus_v11.py fpga
+          git -C fpga -c core.whitespace=cr-at-eol diff --check
+          python3 - <<'PY'
+          import subprocess
+          files=set(subprocess.check_output(["git","-C","fpga","diff","--name-only"],text=True).splitlines())
+          expected={"rtl/agnus_beamcounter.v","rtl/cpu_wrapper.v","rtl/minimig.v",
+                    "rtl/paula.v","rtl/paula_floppy.v","rtl/fx68k/fx68k.sv","Minimig.sv",
+                    "rtl/minimig_m68k_bridge.v"}
+          if files!=expected: raise SystemExit(f"Unexpected file set: {files ^ expected}")
+          s=open("fpga/rtl/agnus_beamcounter.v").read()
+          if "else if (cck && (~ersy || |hpos[8:1]))" in s: raise SystemExit("Rick ERSY fix missing")
+          if "else if (cck)" not in s: raise SystemExit("No Rick ERSY v4 line")
+          PY
+          grep -q "bart_v11_wait_target" fpga/rtl/minimig_m68k_bridge.v
+          grep -q "bart_v11_waits" fpga/rtl/paula_floppy.v
+          git -C fpga diff --stat
+          git -C fpga diff > bart-fpga-source.diff
+      - name: Use fitter seed ${{ matrix.seed }} without changing functional HDL
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'set_global_assignment -name SEED 1' fpga/Minimig.qsf
+          sed -i 's/-name SEED 1/-name SEED ${{ matrix.seed }}/' fpga/Minimig.qsf
+      - name: Free runner disk space
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache /usr/local/share/powershell /usr/local/share/chromium /usr/local/share/boost /opt/az; do
+            if [ -e "$path" ]; then sudo rm -rf -- "$path"; fi
+          done
+          sudo apt-get clean
+      - name: Compile FPGA with Quartus 17.0.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/raetro/quartus:mister
+          docker image inspect ghcr.io/raetro/quartus:mister --format '{{json .RepoDigests}}' > quartus-image-digests.json
+          docker run --rm -v "$PWD/fpga:/work" -w /work ghcr.io/raetro/quartus:mister quartus_sh --flow compile Minimig 2>&1 | tee quartus-bart-compile.log
+          test -s fpga/output_files/Minimig.rbf
+      - name: Extract critical timing endpoints for later diagnosis
+        if: always()
+        shell: bash
+        run: |
+          if [ -s fpga/output_files/Minimig.sta.rpt ]; then
+            cp scripts/report-bart-timing.tcl fpga/report-bart-timing.tcl
+            docker run --rm -v "$PWD/fpga:/work" -w /work ghcr.io/raetro/quartus:mister quartus_sta -t report-bart-timing.tcl 2>&1 | tee bart-detailed-timing.log || true
+          fi
+      # Repository policy for all future Bart diagnostics:
+      # Once Quartus has compiled an .rbf, ALWAYS archive it with checksum,
+      # all five timing margins and an explicit PASS/FAIL/UNKNOWN verdict.
+      # A negative timing margin still FAILS the Actions job, but the bitstream
+      # remains downloadable for a user-selected experimental test.
+      - name: Package compiled FPGA bitstream and timing verdict BEFORE strict gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/package-bart-diagnostic-fpga.py package \
+            --binary fpga/output_files/Minimig.rbf \
+            --compile-log quartus-bart-compile.log \
+            --out dist \
+            --name Minimig_Bart_BusWaits_v11_seed${{ matrix.seed }}.rbf \
+            --seed ${{ matrix.seed }} \
+            --run-id "$GITHUB_RUN_ID" \
+            --source-sha "$GITHUB_SHA"
+          {
+            echo 'fpga_upstream=7d5d3c2f685af4ce3eb361c22893fccd153f2d87'
+            echo 'working_rick_fix=ERSY v4 patch'
+            echo 'bart_instrumentation=Rick ERSYv4 + Bart v1/v2/v3/v6/v8 CPU diagnostics + v11 runtime CPU bus DTACK waits'
+            echo 'fitter_seed=${{ matrix.seed }}'
+            echo "github_run=$GITHUB_RUN_ID"
+            echo "github_sha=$GITHUB_SHA"
+            cat dist/TIMING-STATUS.txt
+            cat quartus-image-digests.json
+          } > dist/SOURCE-BART-SNAPSHOT.txt
+          test -s dist/Minimig_Bart_BusWaits_v11_seed${{ matrix.seed }}.rbf
+          test -s dist/Minimig_Bart_BusWaits_v11_seed${{ matrix.seed }}.rbf.sha256
+          test -s dist/TIMING-STATUS.json
+          echo "Compiled bitstream was packaged before enforcing timing gate."
+      - name: Strict timing gate - require nonnegative worst-case slack on all categories
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/package-bart-diagnostic-fpga.py gate \
+            --status-file dist/TIMING-STATUS.json
+      - name: Upload FPGA and timing reports, even if timing is rejected
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bart-BusWaits-FPGA-v11-seed${{ matrix.seed }}
+          path: |
+            dist/*
+            bart-fpga-source.diff
+            fpga/output_files/*.rpt
+            fpga/output_files/*.summary
+            quartus-bart-compile.log
+            bart-detailed-timing.log
+            fpga/bart-critical-setup.txt
+            fpga/bart-critical-hold.txt
+            quartus-image-digests.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  bart-main:
+    name: Physical Floppy Main v11 runtime CPU wait writer (shared for six seeds)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get pinned Main v1.3 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/manfredi90/Main_MiSTer_Physical_Floppy.git main-source
+          git -C main-source checkout --detach d2757b2c420b1336f51c0ff641f3bad4d3c2c3c2
+          test "$(git -C main-source rev-parse HEAD)" = d2757b2c420b1336f51c0ff641f3bad4d3c2c3c2
+      - name: Add on-demand snapshot reader (no floppy datapath changes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/patch_bart_main_snapshot_v1.py main-source
+          python3 scripts/patch_bart_main_cpu_bus_v2.py main-source
+          python3 scripts/patch_bart_main_fx68k_internal_v3.py main-source
+          python3 scripts/patch_bart_main_first_df_fetch_v6.py main-source
+          python3 scripts/patch_bart_main_first_reset_linef_v8.py main-source
+          python3 scripts/patch_bart_main_runtime_bus_v11.py main-source
+          git -C main-source diff --check -- user_io.cpp
+          grep -q 'bart_v11_wait_poll' main-source/user_io.cpp
+          test "$(git -C main-source diff --name-only -- user_io.cpp)" = "user_io.cpp"
+          git -C main-source diff -- user_io.cpp > bart-main-source.diff
+      - name: Install release-compatible ARM GNU compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 'https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz' | sudo tar -xJ -C /opt
+          echo "$(echo /opt/gcc-arm-*/bin)" >> "$GITHUB_PATH"
+      - name: Compile ARM Main snapshot reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C main-source -j2
+          test -s main-source/bin/MiSTer
+          file main-source/bin/MiSTer | grep -q 'ELF 32-bit.*ARM'
+          mkdir -p dist
+          cp main-source/bin/MiSTer dist/MiSTer_Physical-Floppy_BartBusWaitsV11
+          chmod +x dist/MiSTer_Physical-Floppy_BartBusWaitsV11
+          (cd dist && sha256sum MiSTer_Physical-Floppy_BartBusWaitsV11 > MiSTer_Physical-Floppy_BartBusWaitsV11.sha256)
+          {
+            echo 'main_upstream=d2757b2c420b1336f51c0ff641f3bad4d3c2c3c2'
+            echo 'instrumentation=Bart v1+v2+v3+v6+v8 Main on-demand reader and v11 E8xx runtime CPU wait writer'
+            echo "github_run=$GITHUB_RUN_ID"
+          } > dist/SOURCE-BART-MAIN-SNAPSHOT.txt
+      - name: Upload separate Main snapshot reader
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bart-BusWaits-Main-v11
+          path: |
+            dist/*
+            bart-main-source.diff
+          if-no-files-found: warn
+          retention-days: 30
