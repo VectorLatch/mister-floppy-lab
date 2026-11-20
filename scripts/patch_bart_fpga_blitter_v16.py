@@ -132,8 +132,8 @@ wire [7:0] bart_v16_expired;"""
         "wire        blit_nasty;\nwire bart_v16_blit_busy_cpu;",
         "minimig Agnus busy wire")
     d["mini"]=once(d["mini"],
-        "\t.blit_nasty(blit_nasty),",
-        "\t.blit_nasty(blit_nasty),\n\t.bart_v16_blit_busy_cpu(bart_v16_blit_busy_cpu),",
+        "\t.int3(int3),\n\t.blit_nasty(blit_nasty),",
+        "\t.int3(int3),\n\t.blit_nasty(blit_nasty),\n\t.bart_v16_blit_busy_cpu(bart_v16_blit_busy_cpu),",
         "minimig Agnus busy connection")
     # Paired v15 settings hook occurs twice: Paula and CPU bridge.
     if d["mini"].count("\t.bart_v15_waits(bart_v15_waits),")!=2:
