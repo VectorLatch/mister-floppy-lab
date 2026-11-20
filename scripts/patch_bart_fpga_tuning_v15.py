@@ -53,16 +53,22 @@ def apply(root):
  // Ack responses: A900..AE00 OR the latched 8-bit value.
  // This prevents the v14 Main from silently talking to v15 FPGA.
 reg bart_v15_cmd = 1'b0;
+reg bart_v15_write = 1'b0;
 reg [2:0] bart_v15_sel = 3'd0;
 wire [7:0] bart_v15_readback = bart_v15_waits[bart_v15_sel*8 +: 8];
+// E9F0..E9F5 read-only commands echo live register values without changing them.
+// Main uses them before updating, so rollback works even across full core reloads.
 always @(posedge clk) begin
     if (clk7_en) begin
         if (!IO_ENA) bart_v15_cmd <= 1'b0;
         else if (stb7 && cmd_cnt == 2'd0) begin
-            bart_v15_cmd <= (rx_data[15:3] == 13'h1D20) && (rx_data[2:0] <= 3'd5);
+            bart_v15_cmd <= (rx_data[15:3] == 13'h1D20 ||
+                             rx_data[15:3] == 13'h1D3E) &&
+                             (rx_data[2:0] <= 3'd5);
+            bart_v15_write <= (rx_data[15:3] == 13'h1D20);
             bart_v15_sel <= rx_data[2:0];
         end
-        else if (stb7 && cmd_cnt == 2'd1 && bart_v15_cmd)
+        else if (stb7 && cmd_cnt == 2'd1 && bart_v15_cmd && bart_v15_write)
             bart_v15_waits[bart_v15_sel*8 +: 8] <= rx_data[7:0];
     end
 end
