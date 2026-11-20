@@ -35,7 +35,9 @@ static bool bart_v15_read_slot(int slot, unsigned *value)
         spi_w(0);
         uint16_t r=spi_w(0);
         DisableFpga();
-        if ((r & 0xFF00)==(uint16_t)(0xA900|(slot<<8))) {
+        // SPI transport may return the previous transaction's value.
+        // Always issue the same READ twice and trust only the second.
+        if(n==1 && (r & 0xFF00)==(uint16_t)(0xA900|(slot<<8))) {
             *value=(unsigned)(r & 0xFF);
             return true;
         }
