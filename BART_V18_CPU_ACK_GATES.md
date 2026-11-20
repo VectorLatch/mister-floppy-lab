@@ -24,9 +24,7 @@ Sampling is once per CPU `/AS` transaction, with distinct event detectors:
 | ACTIVE_WAITS | V16 interlock actually asserted (should match v16 observations) |
 
 The counters may overlap (one transaction can enter multiple categories).
-`PREACK_BUSY` may be larger than `PREACK_RAW_LOW+PREACK_RAW_HIGH` only if
-the source snapshot has changed; in a correctly functioning build the
-two latter categories partition it by raw AS state.
+`PREACK_RAW_LOW` and `PREACK_RAW_HIGH` are independent per-transaction counters. One long transaction could be counted in both if the raw AS signal changes during it; therefore their sum may exceed `PREACK_BUSY`. Each is individually bounded by `PREACK_BUSY`.
 
 v17 `EC00` snapshots both v17 and v18 counters on the same FPGA edge,
 `EC01` clears both. v18 `ED7F` must return signature `D718`, and
@@ -51,8 +49,7 @@ If PREACK_BUSY>0 but PREACK_RAW_LOW=0, the raw-AS gate, not the
 acknowledgement gate, may be causing the interlock to miss valid overlaps.
 If PREACK_BUSY=0 and POSTACK_BUSY>0, the overlaps occur only after
 acknowledgement and could not have been held by this v16 wait design.
-If BUSY_STROBES>0 it confirms some writes were accepted while busy,
-but by itself does not prove those writes violate real Amiga timing.
+If BUSY_STROBES>0, the CPU bridge asserted write strobes while Agnus was busy. This does not by itself establish whether Agnus accepted those writes or whether the overlap violates real Amiga timing.
 
 Strict six-seed Quartus workflow: `.github/workflows/build-bart-v18-bus-ack-gates.yml`.
 Installer selects a passing seed, backs up MiSTer.ini and installs
