@@ -76,8 +76,9 @@ end
         "wire [7:0] bart_v14_extra; // split read/write/custom/blitter-priority waits",
         "Minimig source wire")
     d["mini"]=once(d["mini"],
-        "\t.bart_v11_waits(bart_v11_waits),",
-        "\t.bart_v11_waits(bart_v11_waits),\n\t.bart_v14_extra(bart_v14_extra),",
+        "\t.IO_DOUT(IO_DOUT_PAULA),\n\t.bart_v11_waits(bart_v11_waits),",
+        "\t.IO_DOUT(IO_DOUT_PAULA),\n\t.bart_v11_waits(bart_v11_waits),\n"
+        "\t.bart_v14_extra(bart_v14_extra),",
         "Minimig Paula hook")
     # The same port appears exactly once more on the CPU bridge instance.
     d["mini"]=once(d["mini"],
