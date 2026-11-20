@@ -94,7 +94,7 @@ download_artifact main Bart-Blitter-Main-v16 \
 VERIFY_ARGS=(
   --repo "$REPO" --run "$RUN" --seed "$SEED"
   --branch "$BRANCH"
-  --workflow ".github/workflows/build-bart-v16-blitter-controls.yml"
+  --workflow ".github/workflows/build-bart-v16-blitter-completion.yml"
   --status-json "$DIR/fpga/TIMING-STATUS.json"
   --fpga-binary "$FPGA"
 )
@@ -140,7 +140,7 @@ scp "$DIR/MiSTer.ini.bart-v16-blitter" "root@$HOST:/media/fat/MiSTer.ini.bart-v1
 ssh "root@$HOST" "set -e; chmod +x /media/fat/$MAIN; mv /media/fat/MiSTer.ini.bart-v16-blitter-tmp /media/fat/MiSTer.ini; sync"
 printf '\nInstalled Bart v16 selectable blitter-completion wait with v15 timing controls / seed %s.\n' "$SEED"
 printf 'Backup: %s\n' "$BACKUP"
-printf 'Reboot MiSTer, load _Unstable/%s, boot current Bart SPS 0884 Disk 2 IPF standalone. Keep A500+ KS2 ECS and same Bart SPS0884 Disk2. Set baseline with: bash scripts/set-bart-v15-timing.sh baseline mister; then bash scripts/set-bart-v16-blitter.sh 2 64 mister on the Mac, then F12 Reset before the game. Change settings without rebuilding.\n' "$FPGA"
+printf 'Reboot MiSTer, load _Unstable/%s, boot current Bart SPS 0884 Disk 2 IPF standalone. Keep A500+ KS2 ECS and same Bart SPS0884 Disk2. Set baseline with: bash scripts/set-bart-v15-timing.sh baseline mister; then bash scripts/set-bart-v16-blitter.sh 1 64 mister on the Mac, then F12 Reset before the game. Change settings without rebuilding.\n' "$FPGA"
 printf '\nWhen hung, capture on Mac:\n'
 printf "ssh root@%s 'rm -f /tmp/bart-snapshots.txt; touch /tmp/bart-snapshot.req; sleep 3; touch /tmp/bart-snapshot.req; sleep 3; cat /tmp/bart-snapshots.txt'\n" "$HOST"
 printf "scp root@%s:/tmp/bart-snapshots.txt \"\$HOME/Downloads/bart-v16-seed${SEED}.txt\"\n" "$HOST"
