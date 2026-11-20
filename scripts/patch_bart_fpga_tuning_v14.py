@@ -82,8 +82,8 @@ end
         "Minimig Paula hook")
     # The same port appears exactly once more on the CPU bridge instance.
     d["mini"]=once(d["mini"],
-        "\t.bart_v11_waits(bart_v11_waits),\n\t.memory_config(memory_config[3:0]),",
-        "\t.bart_v11_waits(bart_v11_waits),\n\t.bart_v14_extra(bart_v14_extra),\n\t.memory_config(memory_config[3:0]),",
+        "\t.bart_v11_waits(bart_v11_waits),\n\t.bls(bls),",
+        "\t.bart_v11_waits(bart_v11_waits),\n\t.bart_v14_extra(bart_v14_extra),\n\t.bls(bls),",
         "Minimig CPU-bridge hook")
 
     d["bridge"]=once(d["bridge"],
