@@ -79,7 +79,7 @@ end
         """    else if (bart_v14_cmd && cmd_cnt != 2'd0)
         tx_data = 16'hB900 | {8'd0, bart_v14_extra};""",
         """    else if (bart_v15_cmd && cmd_cnt != 2'd0)
-        tx_data = 16'hA900 | ({13'd0,bart_v15_sel} << 8) | {8'd0,bart_v15_readback};""",
+        tx_data = (16'hA900 + ({13'd0,bart_v15_sel} << 8)) | {8'd0,bart_v15_readback};""",
         "8-bit per-register echoed readback")
     d["paula"]=once(d["paula"],
         "\toutput [7:0] bart_v14_extra,",
