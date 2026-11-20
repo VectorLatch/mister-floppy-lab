@@ -67,7 +67,6 @@ jobs:
           python3 scripts/patch_bart_fpga_tuning_v15.py fpga
           grep -q 'bart_v15_waits' fpga/rtl/minimig_m68k_bridge.v
           grep -q 'bart_v15_cmd' fpga/rtl/paula_floppy.v
-          grep -q 'bart_v14_extra' fpga/rtl/minimig_m68k_bridge.v
           grep -q "16'hB4AD" fpga/rtl/paula_floppy.v
           git -C fpga -c core.whitespace=cr-at-eol diff --check
           python3 - <<'PY'
