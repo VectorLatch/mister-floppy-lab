@@ -1,0 +1,48 @@
+name: Isolated CPU/chip-RAM read handshake simulation (pinned upstream)
+on:
+  push:
+    branches: [investigation/cpu-read-handshake-20261121]
+    paths:
+      - 'tests/tb_chipram_read.v'
+      - '.github/workflows/verify-cpu-read-handshake.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  demonstrate-upstream:
+    name: Reproduce or reject suspected stale-data read in unmodified bridge
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get exact upstream sources (no Bart timing/diagnostic modifications)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --branch MiSTer https://github.com/MiSTer-devel/Minimig-AGA_MiSTer.git upstream
+          git -C upstream checkout --detach 7d5d3c2f685af4ce3eb361c22893fccd153f2d87
+          test "$(git -C upstream rev-parse HEAD)" = 7d5d3c2f685af4ce3eb361c22893fccd153f2d87
+      - name: Install Icarus Verilog
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq iverilog
+          iverilog -V | head -n 2
+      - name: Simulate read cycles with real upstream CPU bridge and Amiga clock
+        shell: bash
+        run: |
+          set -euo pipefail
+          iverilog -g2012 -s tb_chipram_read -o /tmp/tb-chipram \
+            tests/tb_chipram_read.v \
+            upstream/rtl/minimig_m68k_bridge.v \
+            upstream/rtl/amiga_clk.v
+          vvp /tmp/tb-chipram 2>&1 | tee cpu-read-model.log
+          grep -q 'REPRODUCED:' cpu-read-model.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Bart-CPU-read-bridge-isolated-simulation
+          path: cpu-read-model.log
+          if-no-files-found: warn
