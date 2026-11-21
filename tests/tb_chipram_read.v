@@ -75,7 +75,14 @@ module tb_chipram_read;
         as_n=1'b0;
         tracing=1;
         cycles=0;
+        // The bridge uses the ACK-latched CPU bus to enable a read
+        // one 7MHz phase AFTER /DTACK, so the first ACK edge itself is
+        // NOT the legitimate CPU data observation point.
         wait(dtack_n===1'b0);
+        wait(dut.enable===1'b1);
+        // Capture after the SAME latch edge used by real RTL.
+        while (!(!c1 && c3 && dut.enable)) @(negedge clk);
+        @(posedge clk);
         #1;
         observed=external_data;
         tracing=0;
