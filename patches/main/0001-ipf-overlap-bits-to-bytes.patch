@@ -20,10 +20,7 @@ new file mode 100644
 diff --git a/support/minimig/ipffile.cpp b/support/minimig/ipffile.cpp
 --- a/support/minimig/ipffile.cpp
 +++ b/support/minimig/ipffile.cpp
-@@ -1,7 +1,8 @@
- // IPF image support
- // RobSmithDev
- 
+@@ -4,4 +4,5 @@
  #include "ipffile.h"
 +#include "ipf_index_units.h"
  #include "capsapi/Comtype.h"
