@@ -1,0 +1,82 @@
+name: Verify and build IPF index-bit units correction — Main only
+
+on:
+  push:
+    branches: [fix/ipf-index-bit-byte-units-20261121]
+    paths:
+      - '.github/workflows/verify-build-ipf-index-fix.yml'
+      - 'patches/main/0001-ipf-overlap-bits-to-bytes.patch'
+      - 'tests/test_ipf_overlap_units.cpp'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ipf-main:
+    name: CAPS index pulse unit regression and ARM Main build (no FPGA changes)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get exact pinned Physical Floppy Main v1.3
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/manfredi90/Main_MiSTer_Physical_Floppy.git main-source
+          git -C main-source checkout --detach d2757b2c420b1336f51c0ff641f3bad4d3c2c3c2
+          test "$(git -C main-source rev-parse HEAD)" = d2757b2c420b1336f51c0ff641f3bad4d3c2c3c2
+      - name: Verify original bit/byte mismatch and apply single Main source patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'DI_LOCK_OVLBIT' main-source/support/minimig/ipffile.cpp
+          grep -Fq 'if ((m_bufferPos == m_overlapBit) && (!m_indexSaved))' main-source/support/minimig/ipffile.cpp
+          git -C main-source apply --check "$GITHUB_WORKSPACE/patches/main/0001-ipf-overlap-bits-to-bytes.patch"
+          git -C main-source apply "$GITHUB_WORKSPACE/patches/main/0001-ipf-overlap-bits-to-bytes.patch"
+          git -C main-source diff --check
+          test -f main-source/support/minimig/ipf_index_units.h
+          grep -Fq 'm_bufferPos == ipf_index_byte_from_overlap_bit(m_overlapBit)' main-source/support/minimig/ipffile.cpp
+          git -C main-source diff --stat
+      - name: Compile and run actual production conversion regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=c++11 -O2 -Wall -Wextra -Werror \
+            -Imain-source/support/minimig tests/test_ipf_overlap_units.cpp -o /tmp/test-ipf-index
+          /tmp/test-ipf-index | tee ipf-index-regression.txt
+          grep -q '^PASS:' ipf-index-regression.txt
+      - name: Install pinned release-compatible ARM toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 'https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz' | sudo tar -xJ -C /opt
+          echo "$(echo /opt/gcc-arm-*/bin)" >> "$GITHUB_PATH"
+      - name: Build Physical Floppy Main with minimal IPF index correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C main-source -j2
+          test -s main-source/bin/MiSTer
+          file main-source/bin/MiSTer | grep -q 'ELF 32-bit.*ARM'
+          mkdir -p dist
+          cp main-source/bin/MiSTer dist/MiSTer_Physical-Floppy_IPFIndexFix
+          chmod +x dist/MiSTer_Physical-Floppy_IPFIndexFix
+          (cd dist && sha256sum MiSTer_Physical-Floppy_IPFIndexFix > MiSTer_Physical-Floppy_IPFIndexFix.sha256)
+          {
+            echo 'main_source=manfredi90/Main_MiSTer_Physical_Floppy'
+            echo 'main_ref=d2757b2c420b1336f51c0ff641f3bad4d3c2c3c2'
+            echo 'changes=CAPS DI_LOCK_OVLBIT bit-to-byte INDEX position correction only'
+            echo 'fpga_changes=none'
+            echo "github_run_id=$GITHUB_RUN_ID"
+            echo "github_sha=$GITHUB_SHA"
+          } > dist/SOURCE-IPF-INDEX-FIX.txt
+          cp ipf-index-regression.txt dist/
+      - name: Upload ARM Main candidate and regression results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bart-IndexBits-Main-only
+          path: dist/*
+          if-no-files-found: warn
+          retention-days: 30
