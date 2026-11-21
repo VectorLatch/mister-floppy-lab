@@ -51,7 +51,60 @@ jobs:
           grep -Fq 'm_bufferPos == ipf_index_byte_from_overlap_bit(m_overlapBit)' main-source/support/minimig/ipffile.cpp
           test -f main-source/support/minimig/ipf_index_units.h
           git -C main-source diff --check
-          test "$(git -C main-source diff --name-only)" = "$(printf 'support/minimig/ipffile.cpp\nuser_io.cpp')"
+          # The upstream pinned checkout itself leaves a harmless CRLF change in lib/miniz/ChangeLog.md.
+          # Verify our tracked code modifications separately without treating that upstream checkout artifact as our patch.
+          changed="$(git -C main-source diff --name-only | grep -v '^lib/miniz/ChangeLog.md
+          git -C main-source diff > main-source-v11-plus-ipf.diff
+          git -C main-source status --short
+      - name: Regression-test the corrected production index conversion
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=c++11 -O2 -Wall -Wextra -Werror -Imain-source/support/minimig \
+            tests/test_ipf_overlap_units.cpp -o /tmp/test-ipf-index
+          /tmp/test-ipf-index | tee ipf-index-regression.txt
+          grep -q '^PASS:' ipf-index-regression.txt
+      - name: Install release-compatible ARM GNU compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 'https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz' | sudo tar -xJ -C /opt
+          echo "$(echo /opt/gcc-arm-*/bin)" >> "$GITHUB_PATH"
+      - name: Compile exact combined Main, checksum, and provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C main-source -j2
+          test -s main-source/bin/MiSTer
+          file main-source/bin/MiSTer | grep -q 'ELF 32-bit.*ARM'
+          mkdir -p dist
+          cp main-source/bin/MiSTer dist/MiSTer_Physical-Floppy_BartV11_IPFIndexFix
+          chmod +x dist/MiSTer_Physical-Floppy_BartV11_IPFIndexFix
+          (cd dist && sha256sum MiSTer_Physical-Floppy_BartV11_IPFIndexFix > MiSTer_Physical-Floppy_BartV11_IPFIndexFix.sha256)
+          cp ipf-index-regression.txt dist/
+          {
+            echo 'source=manfredi90/Main_MiSTer_Physical_Floppy'
+            echo 'source_commit=d2757b2c420b1336f51c0ff641f3bad4d3c2c3c2'
+            echo 'Bart v11 Main patch chain=v1+v2+v3+v6+v8+v11'
+            echo 'IPF patch=CAPS DI_LOCK_OVLBIT overlap bit-to-byte index conversion'
+            echo 'compatible_FPGA=Minimig_Bart_BusWaits_v11_seed15.rbf'
+            echo 'FPGA_recompiled=no'
+            echo "github_run=$GITHUB_RUN_ID"
+            echo "github_sha=$GITHUB_SHA"
+          } > dist/SOURCE.txt
+          ls -lh dist
+      - name: Archive replacement Main and verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bart-V11-plus-IPFIndexFix-Main
+          path: |
+            dist/*
+            main-source-v11-plus-ipf.diff
+          if-no-files-found: warn
+          retention-days: 30
+)"
+          test "$changed" = "$(printf 'support/minimig/ipffile.cpp\nuser_io.cpp')"
           git -C main-source diff > main-source-v11-plus-ipf.diff
           git -C main-source status --short
       - name: Regression-test the corrected production index conversion
