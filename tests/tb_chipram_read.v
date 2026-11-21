@@ -44,6 +44,14 @@ module tb_chipram_read;
         .host_rdat(host_rdat),.host_ack(host_ack)
     );
 
+    reg tracing=0;
+    integer cycles=0;
+    always @(posedge clk) if(tracing && cycles<22) begin
+        cycles=cycles+1;
+        $display("TRACE t=%0t cck=%b c1=%b c3=%b clk7en=%b clk7nen=%b AS=%b latched_AS=%b ldtack=%b ta=%b enable=%b read_strobe=%b in=%04h latched=%04h",
+                 $time,cck,c1,c3,clk7_en,clk7n_en,
+                 as_n,dut.l_as,dut.l_dtack,dut._ta_n,dut.enable,rd,data_in,external_data);
+    end
     integer expect_corrected=0;
     reg [15:0] observed;
     initial begin
@@ -65,9 +73,12 @@ module tb_chipram_read;
         @(negedge cck);
         @(negedge clk);
         as_n=1'b0;
+        tracing=1;
+        cycles=0;
         wait(dtack_n===1'b0);
         #1;
         observed=external_data;
+        tracing=0;
         $display("RESULT phase_dma=%0d expected=%04h observed=%04h cck=%b dbr=%b rd=%b",
                  dma_phase,word,observed,cck,dbr,rd);
         if (!dma_phase && observed !== word)
