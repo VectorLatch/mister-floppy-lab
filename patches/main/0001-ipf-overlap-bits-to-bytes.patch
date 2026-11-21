@@ -2,7 +2,7 @@ diff --git a/support/minimig/ipf_index_units.h b/support/minimig/ipf_index_units
 new file mode 100644
 --- /dev/null
 +++ b/support/minimig/ipf_index_units.h
-@@ -0,0 +1,13 @@
+@@ -0,0 +1,14 @@
 +// SPDX-License-Identifier: GPL-3.0-or-later
 +#pragma once
 +#include <cstdint>
