@@ -1,0 +1,40 @@
+diff --git a/support/minimig/ipf_index_units.h b/support/minimig/ipf_index_units.h
+new file mode 100644
+--- /dev/null
++++ b/support/minimig/ipf_index_units.h
+@@ -0,0 +1,13 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++#pragma once
++#include <cstdint>
++
++// CAPSLockTrack() with DI_LOCK_OVLBIT returns the index/overlap
++// position in *bits*. IPFFile::m_bufferPos indexes bytes of trackbuf
++// and timebuf, i.e. eight bitcells per entry.
++//
++// The density stream has one entry per eight bitcells, so INDEX can
++// only be emitted at a byte boundary. Round UP to avoid an early pulse.
++static inline uint32_t ipf_index_byte_from_overlap_bit(uint32_t bitpos)
++{
++    return (bitpos >> 3) + ((bitpos & 7u) != 0u);
++}
+diff --git a/support/minimig/ipffile.cpp b/support/minimig/ipffile.cpp
+--- a/support/minimig/ipffile.cpp
++++ b/support/minimig/ipffile.cpp
+@@ -1,7 +1,8 @@
+ // IPF image support
+ // RobSmithDev
+ 
+ #include "ipffile.h"
++#include "ipf_index_units.h"
+ #include "capsapi/Comtype.h"
+ #include "capsapi/CapsAPI.h"
+ #ifdef WINDOWS
+@@ -351,7 +352,7 @@ bool IPFFile::fluxRead(uint16_t* outputBuffer, uint32_t numWords) {
+ 	
+ 	while (numWords) {
+ 		// index
+-		if ((m_bufferPos == m_overlapBit) && (!m_indexSaved)) {
++		if ((m_bufferPos == ipf_index_byte_from_overlap_bit(m_overlapBit)) && (!m_indexSaved)) {
+ 			*outputBuffer = 0;
+ 			outputBuffer++;
+ 			numWords--;
