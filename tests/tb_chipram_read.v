@@ -60,6 +60,10 @@ module tb_chipram_read;
         phase_dma=dma_phase;
         expected_data=word;
         repeat(24) @(negedge clk);
+        // The 68000 does not assert /AS at an arbitrary 28MHz phase.
+        // Begin each transaction early in a CPU-access half-slot.
+        @(negedge cck);
+        @(negedge clk);
         as_n=1'b0;
         wait(dtack_n===1'b0);
         #1;
