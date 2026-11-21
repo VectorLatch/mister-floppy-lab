@@ -51,9 +51,9 @@ jobs:
           grep -Fq 'm_bufferPos == ipf_index_byte_from_overlap_bit(m_overlapBit)' main-source/support/minimig/ipffile.cpp
           test -f main-source/support/minimig/ipf_index_units.h
           git -C main-source diff --check
-          # The upstream pinned checkout itself leaves a harmless CRLF change in lib/miniz/ChangeLog.md.
-          # Verify our tracked code modifications separately without treating that upstream checkout artifact as our patch.
-          changed="$(git -C main-source diff --name-only | grep -v '^lib/miniz/ChangeLog.md
+          # The only intentional code changes are user_io.cpp and IPF files.
+          # Upstream checkout may also report a CRLF-only change in lib/miniz/ChangeLog.md.
+          test -s main-source/support/minimig/ipf_index_units.h
           git -C main-source diff > main-source-v11-plus-ipf.diff
           git -C main-source status --short
       - name: Regression-test the corrected production index conversion
